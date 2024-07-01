@@ -142,6 +142,109 @@ def data_preparation(data_transacional):
     data_transacional = data_transacional.drop(data_transacional[data_transacional['prom_imp_oec_12m'] < 0 ].index)
 
 
+    from sklearn.preprocessing import LabelEncoder
+    encoder = LabelEncoder()
+    data_transacional['desi_final_cda_encoding'] = encoder.fit_transform(data_transacional['desi_final_cda'])
+    data_transacional['estado_civil_encoding'] = encoder.fit_transform(data_transacional['estado_civil'])
+    data_transacional['sexo_encoding'] = encoder.fit_transform(data_transacional['sexo'])
+    data_transacional['grado_instruccion_encoding'] = encoder.fit_transform(data_transacional['grado_instruccion'])
+    data_transacional['tipotrabajador_encoding'] = encoder.fit_transform(data_transacional['tipotrabajador'])
+
+    # Copia del df para las ección de RFM
+    data_RFM = data_transacional.copy()
+
+    # Segmentación RFM
+
+    #Elección de variables del dataframe transacional
+    data_RFM_df = data_RFM[['ID_DOC','max_fec_compra_spsa_12m','frec_compra_spsa_12m','prom_imp_spsa_12m','max_fec_compra_far_12m','frec_compra_far_12m','prom_imp_far_12m','max_fec_compra_oec_12m','frec_compra_oec_12m','prom_imp_oec_12m','max_fec_compra_pro_12m','frec_compra_pro_12m','prom_imp_pro_12m']]
+
+
+    #Calculando la recencia
+    df_recency = data_RFM_df.groupby('ID_DOC').agg({'max_fec_compra_spsa_12m': 'max','max_fec_compra_far_12m': 'max','max_fec_compra_oec_12m': 'max','max_fec_compra_pro_12m': 'max'}).reset_index()
+
+    for column in data_RFM_df.columns:
+        if column.startswith('max_fec_compra'):
+            max_date = data_RFM_df[column].max()
+            prefix = column.split('_')[3]  # Obtener el prefijo de la columna
+            # Recency
+            columna_ultima_compra = 'ultima_compra_' + prefix
+            df_recency[columna_ultima_compra] = max_date
+            df_recency[columna_ultima_compra] = pd.to_datetime(df_recency[columna_ultima_compra])
+            data_RFM_df[column] = pd.to_datetime(data_RFM_df[column])
+            columna_recency = 'R_' + prefix
+            df_recency[columna_recency] = (df_recency[columna_ultima_compra] - df_recency[column]).dt.days
+
+    #Calculando la frecuencia
+
+    df_frequency = data_transacional.groupby('ID_DOC').agg({'frec_compra_spsa_12m': 'sum','frec_compra_far_12m': 'sum','frec_compra_oec_12m': 'sum','frec_compra_pro_12m': 'sum'}).reset_index()
+    df_frequency = df_frequency.rename(columns={'frec_compra_spsa_12m': 'F_spsa', 'frec_compra_far_12m': 'F_far', 'frec_compra_oec_12m': 'F_oec', 'frec_compra_pro_12m': 'F_pro'})
+
+
+    #Calculando el valor monetario
+
+    df_monetary = data_transacional.groupby('ID_DOC').agg({
+        'prom_imp_spsa_12m': 'sum',
+        'prom_imp_far_12m': 'sum',
+        'prom_imp_oec_12m': 'sum',
+        'prom_imp_pro_12m': 'sum'
+    }).reset_index()
+
+    df_monetary = df_monetary.rename(columns={'prom_imp_spsa_12m': 'M_spsa', 'prom_imp_far_12m': 'M_far', 'prom_imp_oec_12m': 'M_oec', 'prom_imp_pro_12m': 'M_pro'})
+
+
+    #Uniendo los dataframes df_recency, df_frequency y df_monetary
+
+    rf_df = df_recency[['ID_DOC', 'R_spsa', 'R_far', 'R_oec', 'R_pro']].merge(df_frequency, on='ID_DOC')
+    rfm_df = rf_df.merge(df_monetary, on='ID_DOC')
+    rfm_df.head()
+
+    #Data para RFM Global
+    rfm_df_global = rfm_df.copy()
+
+
+    #Rankiando el ID_DOC en base al RFM
+
+    #Crear nuevas columnas con rank
+    for col in rfm_df.columns[1:]:
+        if col.find('_', 2):
+            #Crear nuevas columnas con rank
+            rfm_df[col + '_rank'] = rfm_df[col].rank(ascending=False)
+            #Crear nuevas columnas con rank normalizado
+            rank_col = col + '_rank'
+            rfm_df[col + '_rank_norm'] = (rfm_df[rank_col] / rfm_df[rank_col].max()) * 100
+
+    #Eliminar las columnas
+    cols_to_drop = [col for col in rfm_df.columns if col.endswith('_rank')]
+    rfm_df.drop(cols_to_drop, axis=1, inplace=True)
+
+    #Calculating la puntuación RFM
+
+    #Creación de las columnas RFM por cada comercio
+    for c in ['spsa', 'far', 'oec', 'pro']:
+        rfm_df[f'RFM_Score_{c}'] = 0.15 * rfm_df[f'R_{c}_rank_norm'] + 0.28 * rfm_df[f'F_{c}_rank_norm'] + 0.57 * rfm_df[f'M_{c}_rank_norm']
+        rfm_df[f'RFM_Score_{c}'] *= 0.05
+
+    RFM_Score = rfm_df[['ID_DOC', 'RFM_Score_spsa', 'RFM_Score_far', 'RFM_Score_oec', 'RFM_Score_pro']]
+
+    df_rfm_g = rfm_df[['ID_DOC','RFM_Score_spsa','RFM_Score_far','RFM_Score_oec','RFM_Score_pro']]
+
+    data_transacional = data_transacional.merge(df_rfm_g , on='ID_DOC')
+
+
+    data_t_v = ['LINEA_ASIG', 'antiguedad_laboral', 'edad', 'ingreso','frec_compra_spsa_12m', 'prom_imp_spsa_12m',
+        'frec_compra_far_12m', 'prom_imp_far_12m', 'frec_compra_oec_12m', 'prom_imp_oec_12m', 'frec_compra_pro_12m', 'prom_imp_pro_12m',
+        'estado_civil_encoding', 'sexo_encoding', 'grado_instruccion_encoding', 'tipotrabajador_encoding', 'RFM_Score_spsa', 'RFM_Score_far',
+        'RFM_Score_oec', 'RFM_Score_pro']
+
+    #Segmentación en base a la puntuación RFM --> 3 Segmentos
+
+    for column in ['spsa', 'far', 'oec', 'pro']:
+        RFM_Score[f"Customer_segment_{column}"] = np.where(RFM_Score[f'RFM_Score_{column}'] > 3.5, "Oro",(np.where(RFM_Score[f'RFM_Score_{column}'] > 2, "Plata",('Bronce'))))
+
+    #Ordenando el dataframe
+    RFM_Score = RFM_Score[['ID_DOC', 'RFM_Score_spsa', 'Customer_segment_spsa', 'RFM_Score_far', 'Customer_segment_far', 'RFM_Score_oec', 'Customer_segment_oec', 'RFM_Score_pro', 'Customer_segment_pro']]
+
+
     print('Transformación de datos completa')
     return data_transacional
 
@@ -159,12 +262,12 @@ def main():
     # Matriz de Entrenamiento
     df1 = read_file_csv('DATA_MUESTRA.csv')
     tdf1 = data_preparation(df1)
-    data_exporting(tdf1,['ID_DOC', 'LINEA_ASIG', 'desi_final_cda', 'antiguedad_laboral', 'edad','estado_civil', 'flag_nobancariza', 'ingreso', 'sexo','grado_instruccion', 'tipotrabajador', 'max_fec_compra_spsa_12m','frec_compra_spsa_12m', 'prom_imp_spsa_12m', 'max_fec_compra_far_12m','frec_compra_far_12m', 'prom_imp_far_12m', 'max_fec_compra_oec_12m','frec_compra_oec_12m', 'prom_imp_oec_12m', 'max_fec_compra_pro_12m','frec_compra_pro_12m', 'prom_imp_pro_12m'],'data_train.csv')
+    data_exporting(tdf1,['ID_DOC', 'LINEA_ASIG', 'desi_final_cda', 'antiguedad_laboral', 'edad','estado_civil', 'flag_nobancariza', 'ingreso', 'sexo','grado_instruccion', 'tipotrabajador', 'max_fec_compra_spsa_12m','frec_compra_spsa_12m', 'prom_imp_spsa_12m', 'max_fec_compra_far_12m','frec_compra_far_12m', 'prom_imp_far_12m', 'max_fec_compra_oec_12m','frec_compra_oec_12m', 'prom_imp_oec_12m', 'max_fec_compra_pro_12m','frec_compra_pro_12m', 'prom_imp_pro_12m', 'desi_final_cda_encoding','estado_civil_encoding', 'sexo_encoding', 'grado_instruccion_encoding','tipotrabajador_encoding', 'RFM_Score_spsa', 'RFM_Score_far','RFM_Score_oec', 'RFM_Score_pro'],'data_train.csv')
     
     # Matriz de Validación
     df2 = read_file_csv('DATA_MUESTRA_NUEVO.csv')
     tdf2 = data_preparation(df2)
-    data_exporting(tdf2, ['ID_DOC', 'LINEA_ASIG', 'desi_final_cda', 'antiguedad_laboral', 'edad','estado_civil', 'flag_nobancariza', 'ingreso', 'sexo','grado_instruccion', 'tipotrabajador', 'max_fec_compra_spsa_12m','frec_compra_spsa_12m', 'prom_imp_spsa_12m', 'max_fec_compra_far_12m','frec_compra_far_12m', 'prom_imp_far_12m', 'max_fec_compra_oec_12m','frec_compra_oec_12m', 'prom_imp_oec_12m', 'max_fec_compra_pro_12m','frec_compra_pro_12m', 'prom_imp_pro_12m'],'data_val.csv')
+    data_exporting(tdf2, ['ID_DOC', 'LINEA_ASIG', 'desi_final_cda', 'antiguedad_laboral', 'edad','estado_civil', 'flag_nobancariza', 'ingreso', 'sexo','grado_instruccion', 'tipotrabajador', 'max_fec_compra_spsa_12m','frec_compra_spsa_12m', 'prom_imp_spsa_12m', 'max_fec_compra_far_12m','frec_compra_far_12m', 'prom_imp_far_12m', 'max_fec_compra_oec_12m','frec_compra_oec_12m', 'prom_imp_oec_12m', 'max_fec_compra_pro_12m','frec_compra_pro_12m', 'prom_imp_pro_12m', 'desi_final_cda_encoding','estado_civil_encoding', 'sexo_encoding', 'grado_instruccion_encoding','tipotrabajador_encoding', 'RFM_Score_spsa', 'RFM_Score_far','RFM_Score_oec', 'RFM_Score_pro'],'data_val.csv')
     
     # Matriz de Scoring
     #df3 = read_file_csv('WA_Fn-UseC_-xx.csv')
