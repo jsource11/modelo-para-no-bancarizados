@@ -13,18 +13,18 @@ import os
 def eval_model(filename):
     df = pd.read_csv(os.path.join('../data/processed', filename))
     
-    # Replace values in the 'Churn' column
-    df['Churn'] = df['Churn'].replace({'No': 0, 'Yes': 1})
+    # Replace values in the column
+    df['desi_final_cda_encoding'] = df['desi_final_cda_encoding'].replace({'Aprobar': 0, 'Rechazar': 1})
     print(filename, ' cargado correctamente')
     
     # Leemos el modelo entrenado para usarlo
-    package = '../models/best_model.pkl'
+    package = '../models/random_forest_model.pkl'
     model = pickle.load(open(package, 'rb'))
     print('Modelo importado correctamente')
     
     # Predecimos sobre el set de datos de validación 
-    X_test = df.drop(columns=['Churn'])
-    y_test = df['Churn']
+    X_test = df.drop(columns=['desi_final_cda_encoding'])
+    y_test = df['desi_final_cda_encoding']
     y_pred_test=model.predict(X_test)
     
     # Generamos métricas de diagnóstico
@@ -41,7 +41,7 @@ def eval_model(filename):
 
 # Validación desde el inicio
 def main():
-    df = eval_model('telco_customer_val.csv')
+    df = eval_model('data_val.csv')
     print('Finalizó la validación del Modelo')
 
 

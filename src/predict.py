@@ -10,12 +10,12 @@ import os
 # Cargar la tabla transformada
 def score_model(filename, scores):
     df = pd.read_csv(os.path.join('../data/processed', filename))
-    # Replace values in the 'Churn' column
-    df['Churn'] = df['Churn'].replace({'No': 0, 'Yes': 1})
+    # Replace values in the  column
+    df['desi_final_cda_encoding'] = df['desi_final_cda_encoding'].replace({'Aprobar': 0, 'Rechazar': 1})
     print(filename, ' cargado correctamente')
     
     # Leemos el modelo entrenado para usarlo
-    package = '../models/best_model.pkl'
+    package = '../models/random_forest_model.pkl'
     model = pickle.load(open(package, 'rb'))
     print('Modelo importado correctamente')
     
