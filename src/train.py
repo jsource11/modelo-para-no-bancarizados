@@ -69,6 +69,15 @@ def read_file_csv(filename):
     logistic_reg = LogisticRegression()
     apply_classifier(logistic_reg,X_train, X_test, y_train, y_test)
 
+    random_forest = RandomForestClassifier(random_state = 42)
+    apply_classifier2(random_forest,X_train, X_test, y_train, y_test)
+
+    knn = KNeighborsClassifier()
+    knn.fit(X_train, y_train)
+    apply_classifier3(knn,X_train, X_test, y_train, y_test)
+
+    xg_boost = XGBClassifier()
+    apply_classifier4(xg_boost,X_train, X_test, y_train, y_test)
 
 
 def apply_classifier(clf,xTrain,xTest,yTrain,yTest):
@@ -79,6 +88,40 @@ def apply_classifier(clf,xTrain,xTest,yTrain,yTest):
 
     # Guardamos el modelo entrenado para usarlo en produccion
     package = '../models/logisticregression_model.pkl'
+    pickle.dump(clf, open(package, 'wb'))
+    print('Modelo exportado correctamente en la carpeta models')
+
+
+def apply_classifier2(clf,xTrain,xTest,yTrain,yTest):
+    clf.fit(xTrain, yTrain) #Entrenamiento del modelo
+    print('Modelo entrenado')
+    predictions = clf.predict(xTest) #Validación sobre la data de testing
+    conf_mtx = confusion_matrix(yTest,predictions) #Matriz de confusión de la data de testing real con la predicha
+
+    # Guardamos el modelo entrenado para usarlo en produccion
+    package = '../models/random_forest_model.pkl'
+    pickle.dump(clf, open(package, 'wb'))
+    print('Modelo exportado correctamente en la carpeta models')
+
+def apply_classifier3(clf,xTrain,xTest,yTrain,yTest):
+    clf.fit(xTrain, yTrain) #Entrenamiento del modelo
+    print('Modelo entrenado')
+    predictions = clf.predict(xTest) #Validación sobre la data de testing
+    conf_mtx = confusion_matrix(yTest,predictions) #Matriz de confusión de la data de testing real con la predicha
+
+    # Guardamos el modelo entrenado para usarlo en produccion
+    package = '../models/knn_model.pkl'
+    pickle.dump(clf, open(package, 'wb'))
+    print('Modelo exportado correctamente en la carpeta models')
+
+def apply_classifier4(clf,xTrain,xTest,yTrain,yTest):
+    clf.fit(xTrain, yTrain) #Entrenamiento del modelo
+    print('Modelo entrenado')
+    predictions = clf.predict(xTest) #Validación sobre la data de testing
+    conf_mtx = confusion_matrix(yTest,predictions) #Matriz de confusión de la data de testing real con la predicha
+
+    # Guardamos el modelo entrenado para usarlo en produccion
+    package = '../models/xg_boost_model.pkl'
     pickle.dump(clf, open(package, 'wb'))
     print('Modelo exportado correctamente en la carpeta models')
 
