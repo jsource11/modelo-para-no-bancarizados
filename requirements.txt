@@ -2,3 +2,4 @@
 xgboost>=1.5.2
 imbalanced-learn
 optbinning
+missingno
